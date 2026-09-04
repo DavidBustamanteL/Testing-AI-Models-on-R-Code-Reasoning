@@ -930,6 +930,24 @@ The weakest response in the current benchmark: core R semantics, task fidelity, 
 
 ---
 
+## 9.11 Qwen3.6 and Qwen3.6:35B
+
+### Score: Not scored
+
+Both Qwen3.6 variants failed to produce a substantive final response to the benchmark prompt.
+
+Instead, the returned output consisted only of reasoning or thought-process text, without a completed answer addressing the requested execution trace, problems, corrected code, exact output, and statistical interpretation.
+
+Because there was no final benchmark response to evaluate, these models were not assigned a numerical correctness score.
+
+This is qualitatively different from an incorrect answer. The other tested models attempted to answer the benchmark and could therefore be evaluated against the reference solution. In these two cases, benchmark completion itself failed.
+
+### Verdict
+
+Not scored because no substantive final benchmark answer was produced.
+
+---
+
 # 10. Error Matrix
 
 | Model | `mean()` NA default | Grouped `mutate()` | A disappears after filter | `cor()` NA default | Valid syntax recognition | Exact output |
