@@ -20,11 +20,15 @@ The benchmark exposes several common failure modes:
 The tested models were:
 
 1. Codex
-2. Nemotron 3 Super
-3. GPT-OSS 20B
-4. DeepSeek-Coder
-5. Gemma 4E4B
-6. Qwen2.5-Coder
+2. Nemotron-3-Super:cloud
+3. Gemma4:latest (9.6 GB)
+4. Nemotron-3.5-Lightning:latest (25 GB)
+5. GPT-OSS 20B (13 GB)
+6. Qwen3-Coder:30B (18 GB)
+7. DeepSeek-Coder (779 MB)
+8. Gemma 4E4B (8 GB)
+9. Qwen2.5-Coder (4.7 GB)
+10. Mistral:latest (4.4 GB)
 
 ---
 
@@ -416,11 +420,15 @@ Scores are approximate and intended as comparative assessments rather than forma
 | Rank | Model | Score | Overall assessment |
 |---:|---|---:|---|
 | 1 | **Codex** | **9.5/10** | Excellent R execution reasoning with only minor overengineering |
-| 2 | **Nemotron 3 Super** | **6.5/10** | Strong understanding, but important mistakes in empty-group and `cor()` semantics |
-| 3 | **GPT-OSS 20B** | **5/10** | Good execution tracing, weaker API semantics and task fidelity |
-| 4 | **DeepSeek-Coder** | **3/10** | Recognized broad issues but did not actually execute the code correctly |
-| 5 | **Gemma 4E4B** | **2.5/10** | Polished explanation but several basic R errors and changed the requested analysis |
-| 6 | **Qwen2.5-Coder** | **2/10** | Major misunderstandings of valid R syntax, grouping, missing values, and object creation |
+| 2 | **Nemotron-3-Super:cloud** | **6.5/10** | Strong understanding, but important mistakes in empty-group and `cor()` semantics |
+| 3 | **Gemma4:latest (9.6 GB)** | **6.0/10** | Good core reasoning and corrected output, but misses the disappearing-group edge case and misstates `cor()` behavior |
+| 4 | **Nemotron-3.5-Lightning:latest (25 GB)** | **6.0/10** | Strong row-level tracing and valid correction, but incorrect empty-group handling and contradictory exact output |
+| 5 | **GPT-OSS 20B (13 GB)** | **5.0/10** | Good execution tracing, weaker API semantics and task fidelity |
+| 6 | **Qwen3-Coder:30B (18 GB)** | **3.5/10** | Corrected code is mostly good, but the original execution is misunderstood at a fundamental level |
+| 7 | **DeepSeek-Coder (779 MB)** | **3.0/10** | Recognized broad issues but did not actually execute the code correctly |
+| 8 | **Gemma 4E4B (8 GB)** | **2.5/10** | Polished explanation but several basic R errors and changed the requested analysis |
+| 9 | **Qwen2.5-Coder (4.7 GB)** | **2.0/10** | Major misunderstandings of valid R syntax, grouping, missing values, and object creation |
+| 10 | **Mistral:latest (4.4 GB)** | **1.5/10** | Fails core missing-value semantics, changes the task, and proposes broken replacement code |
 
 ---
 
@@ -450,7 +458,7 @@ It correctly concluded that:
 - the corrected result contains A and B with `n = 1`,
 - and both corrected correlations remain `NA`.
 
-It also explicitly distinguished the default `cor()` behavior from the one-observation problem. This is an important detail: in the original pipeline, the final `NA` is not caused by a missing `y`, because the only surviving row is complete.
+It also explicitly distinguished the default `cor()` behavior from the one-observation problem. In the original pipeline, the final `NA` is not caused by a missing `y`, because the only surviving row is complete.
 
 Another particularly strong observation was that:
 
@@ -476,11 +484,11 @@ Codex demonstrated genuine R-specific reasoning rather than merely recognizing s
 
 ---
 
-## 9.2 Nemotron 3 Super
+## 9.2 Nemotron-3-Super:cloud
 
 ### Score: 6.5/10
 
-Nemotron correctly understood the most important missing-value behavior:
+Nemotron-3-Super:cloud correctly understood the most important missing-value behavior:
 
 ```r
 mean(c(1, 2, NA))
@@ -509,7 +517,7 @@ After `filter()` removes every A observation, group A no longer appears in the g
 
 The correct original output contains only B.
 
-Nemotron also made smaller errors:
+Nemotron-3-Super:cloud also made smaller errors:
 
 - it described `NA` in a filter condition as yielding `FALSE` rather than remaining `NA`,
 - it misstated the default missing-value behavior of `cor()`,
@@ -523,9 +531,109 @@ A meaningful step up from weaker models, but still unreliable on subtle executio
 
 ---
 
-## 9.3 GPT-OSS 20B
+## 9.3 Gemma4:latest (9.6 GB)
 
-### Score: 5/10
+### Score: 6.0/10
+
+Gemma4:latest correctly understood that `group_by(group)` makes `mean(x)` group-specific and that `mean()` does not remove `NA` by default.
+
+It also correctly worked out the corrected group means, centered values, surviving observations, and the final corrected result with `n = 1` and `correlation = NA` for both A and B.
+
+The main execution error was the prediction that the original result would still contain both groups.
+
+In the original pipeline, every A row is removed and group A disappears completely. `summarise()` therefore returns only the surviving B group.
+
+Gemma4:latest also incorrectly suggested that `cor()` automatically ignores incomplete pairs.
+
+Base R defaults to:
+
+```r
+use = "everything"
+```
+
+so complete-pair handling must be requested explicitly.
+
+In this particular pipeline, however, the final original `NA` is caused by the single surviving observation rather than by a missing `y`.
+
+The corrected code was mostly good. Using `pairwise.complete.obs` is acceptable for this two-variable case, although `complete.obs` matches the benchmark wording more directly.
+
+An additional `is.finite()` condition was unnecessary and slightly changed the specification.
+
+### Verdict
+
+Good R knowledge and a strong correction, but not precise enough on the benchmark's empty-group and `cor()` traps.
+
+---
+
+## 9.4 Nemotron-3.5-Lightning:latest (25 GB)
+
+### Score: 6.0/10
+
+Nemotron-3.5-Lightning:latest traced the grouped means and centered values well.
+
+It correctly obtained:
+
+```text
+Group A:
+mean_x = NA
+x_centered = NA, NA, NA
+```
+
+and:
+
+```text
+Group B:
+mean_x = 5
+x_centered = -1, 0, 1
+```
+
+It also correctly recognized that only the B row with:
+
+```text
+x = 6
+y = 12
+```
+
+survives the original filter.
+
+Its main error came immediately afterward: it reported group A as an empty `n = 0` row in the final summary.
+
+That is not how the default grouped pipeline behaves. Once every A row has been filtered out, A is absent from the data passed to `summarise()`.
+
+It also incorrectly stated that group B still contained the `y = NA` row after filtering.
+
+That row has:
+
+```text
+x = 5
+x_centered = 0
+y = NA
+```
+
+and is already removed because:
+
+```r
+0 > 0
+# FALSE
+```
+
+The original B correlation is therefore `NA` because only the single complete pair `(6, 12)` remains.
+
+The corrected code itself was valid and the response eventually self-corrected the corrected A count from 0 to 1. However, it left the earlier contradictory output in place, so the exact-output portion remained unreliable.
+
+Its statistical interpretation was generally sound, although describing the post-filter correlation as automatically "biased" was too strong.
+
+Filtering changes the target subpopulation and estimand; whether that is appropriate depends on the research question.
+
+### Verdict
+
+Strong core mechanics and a good repair, but an important `dplyr` empty-group mistake prevents a higher score.
+
+---
+
+## 9.5 GPT-OSS 20B (13 GB)
+
+### Score: 5.0/10
 
 GPT-OSS 20B did a good job tracing the original pipeline.
 
@@ -540,9 +648,9 @@ It correctly recognized:
 
 This is an important strength because several other models failed much earlier.
 
-However, it made multiple mistakes later.
+However, it incorrectly claimed that `cor()` automatically excludes missing values by default.
 
-It incorrectly claimed that `cor()` automatically excludes missing values by default. In R, the default is effectively:
+In R, the default is effectively:
 
 ```r
 use = "everything"
@@ -552,7 +660,9 @@ so missing values generally propagate to `NA`.
 
 It also made an inaccurate claim about `summarise()` retaining grouping. With one grouping variable and standard modern `dplyr` behavior, the final grouping level is typically dropped.
 
-The largest conceptual problem was that it changed the requested analysis. Instead of calculating the correlation per group after filtering, it proposed an overall correlation on the remaining data and repeated that value for each group.
+The largest conceptual problem was that it changed the requested analysis.
+
+Instead of calculating the correlation per group after filtering, it proposed an overall correlation on the remaining data and repeated that value for each group.
 
 That is a different estimand.
 
@@ -562,9 +672,67 @@ Good mental execution of the original code, but weaker knowledge of API details 
 
 ---
 
-## 9.4 DeepSeek-Coder
+## 9.6 Qwen3-Coder:30B (18 GB)
 
-### Score: 3/10
+### Score: 3.5/10
+
+Qwen3-Coder:30B's corrected pipeline was considerably better than its explanation of the original code.
+
+In the correction, it correctly used:
+
+```r
+mean(x, na.rm = TRUE)
+```
+
+centered within groups, filtered positive centered values, and arrived at one surviving observation in each group with an undefined correlation.
+
+The original execution, however, was fundamentally misunderstood.
+
+It repeatedly claimed that:
+
+```r
+mean(x)
+```
+
+inside grouped `mutate()` computes a global mean and even calculated a global value while silently ignoring the `NA`.
+
+Both statements are wrong.
+
+Grouping makes the mean group-specific, and `mean()` does not remove missing values unless:
+
+```r
+na.rm = TRUE
+```
+
+is supplied.
+
+It therefore failed to derive the actual original output.
+
+It also described:
+
+```r
+use = "complete.obs"
+```
+
+as the default for `cor()`, which is incorrect.
+
+A later answer about interpretation correctly distinguished correlation before filtering from correlation conditional on:
+
+```r
+x_centered > 0
+```
+
+but that did not repair the core execution mistakes.
+
+### Verdict
+
+Able to construct a plausible repair, but unreliable when asked what the original R code actually does.
+
+---
+
+## 9.7 DeepSeek-Coder (779 MB)
+
+### Score: 3.0/10
 
 DeepSeek-Coder identified some relevant themes:
 
@@ -575,9 +743,7 @@ DeepSeek-Coder identified some relevant themes:
 
 However, it failed to reason through the actual execution.
 
-Most importantly, it stated that the code:
-
-> computes the mean of `x` within each group while ignoring missing values.
+Most importantly, it stated that the original code computes the mean of `x` within each group while ignoring missing values.
 
 That is false.
 
@@ -608,11 +774,11 @@ The response recognized relevant R vocabulary but did not convincingly execute t
 
 ---
 
-## 9.5 Gemma 4E4B
+## 9.8 Gemma 4E4B (8 GB)
 
 ### Score: 2.5/10
 
-Gemma's answer was polished and detailed, but it contained several fundamental R errors.
+Gemma 4E4B's answer was polished and detailed, but it contained several fundamental R errors.
 
 The most important was:
 
@@ -648,7 +814,11 @@ Gemma also proposed:
 sum(x_centered > 0)
 ```
 
-without `na.rm = TRUE`.
+without:
+
+```r
+na.rm = TRUE
+```
 
 For group A:
 
@@ -669,13 +839,11 @@ A good example of how fluent statistical prose can conceal weak language-specifi
 
 ---
 
-## 9.6 Qwen2.5-Coder
+## 9.9 Qwen2.5-Coder (4.7 GB)
 
-### Score: 2/10
+### Score: 2.0/10
 
-Qwen2.5-Coder performed worst overall.
-
-It incorrectly stated that:
+Qwen2.5-Coder incorrectly stated that:
 
 ```r
 mean_x = mean(x)
@@ -711,7 +879,7 @@ was never defined, despite the code clearly assigning:
 result <- df %>% ...
 ```
 
-It also repeated the common false claim that `mean()` excludes missing values by default.
+It also repeated the false claim that `mean()` excludes missing values by default.
 
 Surprisingly, its rewritten code was mostly valid:
 
@@ -735,16 +903,47 @@ The model showed some ability to produce plausible corrected R code, but its exp
 
 ---
 
+## 9.10 Mistral:latest (4.4 GB)
+
+### Score: 1.5/10
+
+Mistral:latest failed both of the benchmark's central missing-value defaults.
+
+It claimed that `mean()` ignores missing values and suggested that `cor()` automatically drops incomplete pairs.
+
+Both are false under the defaults used in the original script.
+
+It also never traced the original program to its exact surviving rows or output.
+
+Instead of preserving the task, it changed the centering from a group-specific mean to an overall mean, added an unrelated filter on non-missing `y`, and altered the meaning of the requested count.
+
+The proposed replacement code introduced additional problems:
+
+- the computed group means were never used,
+- `length()` was applied to a data frame where `nrow()` was needed,
+- an undefined `covar_pairs()` function was called,
+- and the final `rbind()` combined incompatible structures.
+
+### Verdict
+
+The weakest response in the current benchmark: core R semantics, task fidelity, and replacement-code correctness all failed.
+
+---
+
 # 10. Error Matrix
 
 | Model | `mean()` NA default | Grouped `mutate()` | A disappears after filter | `cor()` NA default | Valid syntax recognition | Exact output |
 |---|---|---|---|---|---|---|
 | **Codex** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **Nemotron 3 Super** | ✅ | ✅ | ❌ | ❌ / mixed | ✅ | ❌ original |
-| **GPT-OSS 20B** | ✅ | ✅ | ✅ | ❌ | ✅ | Mostly |
-| **DeepSeek-Coder** | ❌ | Partial | ❌ | Weak | Mostly | ❌ |
-| **Gemma 4E4B** | ❌ | ✅ | ❌ | ❌ | ✅ | ❌ |
-| **Qwen2.5-Coder** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Nemotron-3-Super:cloud** | ✅ | ✅ | ❌ | ❌ / mixed | ✅ | ❌ original |
+| **Gemma4:latest (9.6 GB)** | ✅ | ✅ | ❌ | ❌ / mixed | ✅ | ❌ original |
+| **Nemotron-3.5-Lightning:latest (25 GB)** | ✅ | ✅ | ❌ | ✅ / mixed | ✅ | ❌ / contradictory |
+| **GPT-OSS 20B (13 GB)** | ✅ | ✅ | ✅ | ❌ | ✅ | Mostly |
+| **Qwen3-Coder:30B (18 GB)** | ❌ | ❌ | ❌ | ❌ / mixed | ✅ | ❌ original |
+| **DeepSeek-Coder (779 MB)** | ❌ | Partial | ❌ | Weak | Mostly | ❌ |
+| **Gemma 4E4B (8 GB)** | ❌ | ✅ | ❌ | ❌ | ✅ | ❌ |
+| **Qwen2.5-Coder (4.7 GB)** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Mistral:latest (4.4 GB)** | ❌ | Partial | Partial | ❌ | ❌ corrected code | ❌ |
 
 ---
 
@@ -874,7 +1073,7 @@ NA
 
 ## 12.1 Fluent explanations are not the same as correct execution
 
-Gemma is the clearest example.
+Gemma 4E4B is a particularly clear example.
 
 Its answer was detailed, organized, and statistically sophisticated in tone. Nevertheless, it failed on several basic R semantics.
 
@@ -884,9 +1083,9 @@ This suggests that presentation quality should not be used as a proxy for code-r
 
 ## 12.2 Some models can repair code they cannot correctly explain
 
-Qwen2.5-Coder is an interesting example.
+Qwen2.5-Coder and Qwen3-Coder:30B are interesting examples.
 
-Its explanation of the original program was very weak, but parts of its corrected code were reasonable.
+Their explanations of the original program were weak relative to parts of their corrected code, which were more plausible.
 
 This indicates that code generation and code execution reasoning are related but separable abilities.
 
@@ -894,7 +1093,7 @@ This indicates that code generation and code execution reasoning are related but
 
 ## 12.3 Models often try to redesign the analysis
 
-Gemma and GPT-OSS 20B both moved toward calculating correlation before filtering or across a different sample.
+Gemma 4E4B and GPT-OSS 20B both moved toward calculating correlation before filtering or across a different sample, while Mistral:latest changed the centering target itself.
 
 This may reflect useful statistical instincts, but it is problematic in a benchmark that asks for a specific sequence of operations.
 
@@ -925,18 +1124,38 @@ This makes exact-output questions unusually effective for code-model evaluation.
 
 ---
 
+## 12.5 Model size does not guarantee stronger reasoning
+
+The addition of local model sizes makes it possible to compare reasoning quality with the approximate storage footprint of the tested models.
+
+The benchmark does not show a simple relationship between model size and performance.
+
+For example, Nemotron-3.5-Lightning:latest had an approximate Ollama size of 25 GB and scored 6.0/10, while the much smaller Gemma4:latest at approximately 9.6 GB received the same score.
+
+Likewise, model size alone cannot explain the ranking among the lower-scoring models.
+
+These comparisons should be treated cautiously because Ollama file size is affected by factors such as quantization and architecture. File size is therefore not equivalent to parameter count, computational complexity, or runtime memory use.
+
+Nevertheless, including the approximate local model size provides useful practical context for evaluating the trade-off between local resource requirements and observed reasoning quality.
+
+---
+
 # 13. Overall Ranking
 
 ```text
-1. Codex             9.5 / 10
-2. Nemotron 3 Super  6.5 / 10
-3. GPT-OSS 20B       5.0 / 10
-4. DeepSeek-Coder    3.0 / 10
-5. Gemma 4E4B        2.5 / 10
-6. Qwen2.5-Coder     2.0 / 10
+1. Codex                                   9.5 / 10
+2. Nemotron-3-Super:cloud                  6.5 / 10
+3. Gemma4:latest (9.6 GB)                  6.0 / 10
+4. Nemotron-3.5-Lightning:latest (25 GB)   6.0 / 10
+5. GPT-OSS 20B (13 GB)                     5.0 / 10
+6. Qwen3-Coder:30B (18 GB)                 3.5 / 10
+7. DeepSeek-Coder (779 MB)                 3.0 / 10
+8. Gemma 4E4B (8 GB)                       2.5 / 10
+9. Qwen2.5-Coder (4.7 GB)                  2.0 / 10
+10. Mistral:latest (4.4 GB)                1.5 / 10
 ```
 
-The gap between Codex and the rest was substantial.
+The gap between Codex and the rest remains substantial.
 
 Codex was the only tested model that consistently combined:
 
@@ -948,7 +1167,9 @@ Codex was the only tested model that consistently combined:
 - exact expected output,
 - and careful statistical interpretation.
 
-Nemotron 3 Super was the closest competitor but still failed an important `dplyr` edge case.
+Nemotron-3-Super:cloud was the closest competitor but still failed an important `dplyr` edge case.
+
+Gemma4:latest and Nemotron-3.5-Lightning:latest formed the next tier: both showed solid R knowledge but missed the disappearing-group behavior that the benchmark was designed to expose.
 
 ---
 
@@ -975,15 +1196,182 @@ The results suggest that future code-model benchmarks should include more tasks 
 
 These tasks are compact, cheap to evaluate, and surprisingly effective at distinguishing models that merely generate plausible code from models that actually reason about it.
 
+The comparison also suggests that larger local model files do not automatically imply stronger reasoning performance. This makes resource requirements an additional dimension worth considering when evaluating models for local use.
+
 ---
 
-# 15. Reproducibility Note
+# 15. Reproducibility and Test Environment
 
-This comparison is based on individual model responses to the same conceptual benchmark prompt. Scores are qualitative and were assigned by manually checking the responses against expected R and `dplyr` behavior.
+This comparison is based on individual model responses to the same conceptual benchmark prompt.
 
-The benchmark is not intended as a comprehensive measure of each model's overall coding ability. It evaluates a narrow but important capability:
+Scores are qualitative and were assigned by manually checking the responses against the expected behavior of R, base statistical functions, and `dplyr`.
+
+## 15.1 Hardware and Operating Systems
+
+The tests were conducted on two separate laptops:
+
+| System | Operating System | System RAM |
+|---|---|---:|
+| Laptop 1 | Windows 11 | 32 GB |
+| Laptop 2 | Debian Linux | 64 GB |
+
+The use of two machines made it possible to run models with different local resource requirements.
+
+The benchmark scores themselves are based on response correctness rather than execution speed or hardware performance.
+
+Hardware differences are therefore relevant primarily for whether a model could be hosted and executed locally, rather than for determining its score.
+
+---
+
+## 15.2 Ollama and Odysseus Setup
+
+The locally hosted models were downloaded and managed using **Ollama**.
+
+The models were then run through **Odysseus**, which served as the interface used to submit the benchmark prompt and collect the model responses.
+
+The general local testing workflow was therefore:
+
+```text
+Benchmark prompt
+      ↓
+   Odysseus
+      ↓
+    Ollama
+      ↓
+Local language model
+      ↓
+ Model response
+      ↓
+Manual evaluation against
+the R reference solution
+```
+
+Cloud-hosted models are explicitly identified in their model names where applicable.
+
+For example:
+
+```text
+Nemotron-3-Super:cloud
+```
+
+was cloud-hosted and should therefore not be interpreted as having the same local hardware requirements as the models downloaded and executed locally.
+
+---
+
+## 15.3 Memory Disabled During Testing
+
+An important part of the experimental setup was that **the memory option in Odysseus was disabled during the benchmark**.
+
+This was done to keep the individual model tests isolated from one another.
+
+In particular, previous benchmark responses were not intentionally retained through Odysseus memory and supplied as contextual information to models tested afterward.
+
+This reduced the risk of **cross-model response contamination**.
+
+Without this precaution, a model tested later could potentially receive information derived from an earlier model's response through the interface's memory system. That would make the benchmark less useful as a comparison of independently generated answers.
+
+Each model was therefore tested with the same benchmark prompt while the Odysseus memory function was disabled.
+
+The intended evaluation procedure was:
+
+```text
+Identical benchmark prompt
+          ↓
+       Odysseus
+   (memory disabled)
+          ↓
+        Ollama
+          ↓
+ Individual language model
+          ↓
+    Independent response
+          ↓
+ Manual evaluation against
+  the R reference solution
+```
+
+It is important to distinguish this from model training.
+
+Disabling Odysseus memory does not imply that the underlying model weights would otherwise be updated or that a model would literally learn from another response during ordinary inference.
+
+Rather, disabling memory was intended to ensure that **previous benchmark answers were not automatically supplied as additional context to subsequent model sessions**.
+
+This makes the comparison closer to an independent-response design.
+
+---
+
+## 15.4 Approximate Local Model Sizes
+
+For the locally tested models where installation size was recorded:
+
+| Model | Approximate Ollama Size |
+|---|---:|
+| Nemotron-3.5-Lightning:latest | 25 GB |
+| Qwen3-Coder:30B | 18 GB |
+| GPT-OSS 20B | 13 GB |
+| Gemma4:latest | 9.6 GB |
+| Gemma 4E4B | 8 GB |
+| Qwen2.5-Coder | 4.7 GB |
+| Mistral:latest | 4.4 GB |
+| DeepSeek-Coder | 779 MB |
+
+These values represent the approximate local model sizes observed for the Ollama installations used during the benchmark.
+
+They should not be interpreted as direct measures of parameter count or model complexity.
+
+Model storage size can depend on factors including:
+
+- quantization,
+- numerical precision,
+- model architecture,
+- packaging,
+- and the particular Ollama model variant used.
+
+The values are nevertheless useful as a practical measure of the amount of local storage required by the tested versions.
+
+---
+
+## 15.5 What Was and Was Not Measured
+
+The benchmark primarily evaluates **answer correctness**.
+
+It does not currently provide systematic measurements of:
+
+- inference speed,
+- tokens per second,
+- time to first token,
+- CPU utilization,
+- GPU utilization,
+- RAM consumption,
+- VRAM consumption,
+- energy consumption,
+- or response latency.
+
+The hardware information and approximate model sizes should therefore be interpreted as contextual information rather than performance benchmarks.
+
+A 25 GB model receiving a particular score should not, for example, automatically be considered less efficient than a 9.6 GB model with the same score without also measuring inference speed, memory consumption, hardware acceleration, and other runtime characteristics.
+
+---
+
+## 15.6 Scope of the Benchmark
+
+The benchmark is not intended as a comprehensive measure of each model's overall coding ability.
+
+It evaluates a narrow but important capability:
 
 > **Precise reasoning about R code without execution.**
+
+The task focuses specifically on whether a model can correctly reason about:
+
+- R execution semantics,
+- grouped `dplyr` operations,
+- missing-value propagation,
+- filtering,
+- summary statistics,
+- exact outputs,
+- and statistical interpretation.
+
+Performance on this benchmark should therefore not be interpreted as a general ranking of the models for all programming, statistical, or language-model tasks.
 
 For a stronger benchmark, the same methodology could be expanded to include:
 
@@ -991,10 +1379,15 @@ For a stronger benchmark, the same methodology could be expanded to include:
 - grouped summaries,
 - joins,
 - recycling rules,
-- `NA` vs `NaN`,
-- `ifelse()` vs `if_else()`,
+- `NA` vs. `NaN`,
+- `ifelse()` vs. `if_else()`,
 - factor coercion,
 - `model.matrix()`,
 - formula interfaces,
 - environments and scoping,
-- and statistical-model output interpretation.
+- statistical-model output interpretation,
+- inference time,
+- memory consumption,
+- and response quality relative to model size.
+
+A larger benchmark containing multiple independent R tasks would also reduce the influence of any one unusual language or package-specific edge case and provide a more reliable comparison of model reasoning ability.
