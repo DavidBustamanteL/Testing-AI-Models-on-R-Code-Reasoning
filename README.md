@@ -19,16 +19,17 @@ The benchmark exposes several common failure modes:
 
 The tested models were:
 
-1. Codex
-2. Nemotron-3-Super:cloud
-3. Gemma4:latest (9.6 GB)
-4. Nemotron-3.5-Lightning:latest (25 GB)
-5. GPT-OSS 20B (13 GB)
-6. Qwen3-Coder:30B (18 GB)
-7. DeepSeek-Coder (779 MB)
-8. Gemma 4E4B (8 GB)
-9. Qwen2.5-Coder (4.7 GB)
-10. Mistral:latest (4.4 GB)
+1. Codex (€20/month)
+2. Microsoft Copilot (Windows, Free)
+3. Nemotron-3-Super:cloud
+4. Gemma4:latest (9.6 GB)
+5. Nemotron-3.5-Lightning:latest (25 GB)
+6. GPT-OSS 20B (13 GB)
+7. Qwen3-Coder:30B (18 GB)
+8. DeepSeek-Coder (779 MB)
+9. Gemma 4E4B (8 GB)
+10. Qwen2.5-Coder (4.7 GB)
+11. Mistral:latest (4.4 GB)
 
 ---
 
@@ -417,24 +418,195 @@ Scores are approximate and intended as comparative assessments rather than forma
 
 # 8. Results
 
-| Rank | Model | Score | Overall assessment |
-|---:|---|---:|---|
-| 1 | **Codex** | **9.5/10** | Excellent R execution reasoning with only minor overengineering |
-| 2 | **Nemotron-3-Super:cloud** | **6.5/10** | Strong understanding, but important mistakes in empty-group and `cor()` semantics |
-| 3 | **Gemma4:latest (9.6 GB)** | **6.0/10** | Good core reasoning and corrected output, but misses the disappearing-group edge case and misstates `cor()` behavior |
-| 4 | **Nemotron-3.5-Lightning:latest (25 GB)** | **6.0/10** | Strong row-level tracing and valid correction, but incorrect empty-group handling and contradictory exact output |
-| 5 | **GPT-OSS 20B (13 GB)** | **5.0/10** | Good execution tracing, weaker API semantics and task fidelity |
-| 6 | **Qwen3-Coder:30B (18 GB)** | **3.5/10** | Corrected code is mostly good, but the original execution is misunderstood at a fundamental level |
-| 7 | **DeepSeek-Coder (779 MB)** | **3.0/10** | Recognized broad issues but did not actually execute the code correctly |
-| 8 | **Gemma 4E4B (8 GB)** | **2.5/10** | Polished explanation but several basic R errors and changed the requested analysis |
-| 9 | **Qwen2.5-Coder (4.7 GB)** | **2.0/10** | Major misunderstandings of valid R syntax, grouping, missing values, and object creation |
-| 10 | **Mistral:latest (4.4 GB)** | **1.5/10** | Fails core missing-value semantics, changes the task, and proposes broken replacement code |
+| Rank | Model | Score | Access / Cost | Overall assessment |
+|---:|---|---:|---|---|
+| T-1 | **Microsoft Copilot (Windows, Free)** | **9.5/10** | **Free** | Excellent execution tracing, correct output prediction, valid corrected code, and strong statistical interpretation |
+| T-1 | **Codex** | **9.5/10** | **€20/month** | Excellent R execution reasoning with only minor overengineering |
+| 3 | **Nemotron-3-Super:cloud** | **6.5/10** | Cloud | Strong understanding, but important mistakes in empty-group and `cor()` semantics |
+| T-4 | **Gemma4:latest (9.6 GB)** | **6.0/10** | Local | Good core reasoning and corrected output, but misses the disappearing-group edge case and misstates `cor()` behavior |
+| T-4 | **Nemotron-3.5-Lightning:latest (25 GB)** | **6.0/10** | Local | Strong row-level tracing and valid correction, but incorrect empty-group handling and contradictory exact output |
+| 6 | **GPT-OSS 20B (13 GB)** | **5.0/10** | Local | Good execution tracing, weaker API semantics and task fidelity |
+| 7 | **Qwen3-Coder:30B (18 GB)** | **3.5/10** | Local | Corrected code is mostly good, but the original execution is misunderstood at a fundamental level |
+| 8 | **DeepSeek-Coder (779 MB)** | **3.0/10** | Local | Recognized broad issues but did not actually execute the code correctly |
+| 9 | **Gemma 4E4B (8 GB)** | **2.5/10** | Local | Polished explanation but several basic R errors and changed the requested analysis |
+| 10 | **Qwen2.5-Coder (4.7 GB)** | **2.0/10** | Local | Major misunderstandings of valid R syntax, grouping, missing values, and object creation |
+| 11 | **Mistral:latest (4.4 GB)** | **1.5/10** | Local | Fails core missing-value semantics, changes the task, and proposes broken replacement code |
 
 ---
 
 # 9. Model-by-Model Evaluation
 
-## 9.1 Codex
+## 9.1 Microsoft Copilot (Windows, Free)
+
+### Score: 9.5/10
+
+Microsoft Copilot produced one of the strongest responses in the benchmark.
+
+It correctly traced the grouped calculation:
+
+```r
+# Group A
+mean(c(1, 2, NA))
+# NA
+
+# Group B
+mean(c(4, 5, 6))
+# 5
+```
+
+It then correctly derived:
+
+```text
+Group A:
+x_centered = NA, NA, NA
+
+Group B:
+x_centered = -1, 0, 1
+```
+
+Copilot correctly recognized that:
+
+```r
+filter(x_centered > 0)
+```
+
+removes every row from group A and retains only the final observation from group B:
+
+```text
+group = B
+x = 6
+y = 12
+```
+
+It also correctly understood the empty-group behavior. Once all rows from group A have been removed, group A does not reappear in `summarise()` as a row with `n = 0`.
+
+The original output is therefore:
+
+```text
+# A tibble: 1 × 3
+  group     n correlation
+  <fct> <int>       <dbl>
+1 B         1          NA
+```
+
+Another strong part of the response was the treatment of missing values in `cor()`.
+
+Group B originally contains:
+
+```r
+y = c(8, NA, 12)
+```
+
+but the observation containing `y = NA` is removed by the filter before `cor()` is evaluated. The original `NA` correlation is therefore caused by having only one remaining observation, not by missingness in the surviving data.
+
+Copilot's corrected code was direct and valid:
+
+```r
+result_corrected <- df %>%
+  group_by(group) %>%
+  mutate(
+    mean_x = mean(x, na.rm = TRUE),
+    x_centered = x - mean_x
+  ) %>%
+  filter(x_centered > 0) %>%
+  summarise(
+    n = n(),
+    correlation = cor(x, y, use = "complete.obs")
+  )
+```
+
+The corrected calculation gives:
+
+```text
+Group A:
+mean_x = 1.5
+x_centered = -0.5, 0.5, NA
+
+Group B:
+mean_x = 5
+x_centered = -1, 0, 1
+```
+
+After filtering, the remaining observations are:
+
+```text
+Group A:
+x = 2
+y = 4
+
+Group B:
+x = 6
+y = 12
+```
+
+so the corrected output is:
+
+```text
+# A tibble: 2 × 3
+  group     n correlation
+  <fct> <int>       <dbl>
+1 A         1          NA
+2 B         1          NA
+```
+
+Copilot also handled the statistical interpretation well. It distinguished between correlation before filtering, which uses the complete observations in the full group, and correlation after filtering, which is conditional on `x` being above its group-specific mean.
+
+For the complete pairs before filtering:
+
+```text
+Group A:
+(1, 2)
+(2, 4)
+r = 1
+
+Group B:
+(4, 8)
+(6, 12)
+r = 1
+```
+
+After filtering, each group contains only one observation, so the correlation is undefined.
+
+### Weakness
+
+The main technical weakness was the claim that:
+
+```r
+cor(c(6), c(12))
+```
+
+returns `NA` and also issues a warning about insufficient observations.
+
+The important substantive conclusion, `NA`, is correct. The warning claim was unnecessary and imprecise.
+
+Copilot also used the vague formulation that `cor()` with missing values may return `NA` "or error in some settings." This was broader than necessary for the specific call being analyzed.
+
+These are minor issues and do not affect the execution trace, corrected code, exact output, or statistical interpretation.
+
+### Verdict
+
+Microsoft Copilot demonstrated excellent R-specific execution reasoning.
+
+It correctly handled:
+
+- grouped `mutate()` behavior,
+- `mean()` with missing values,
+- propagation of `NA`,
+- `filter()` semantics,
+- disappearing groups,
+- the one-observation correlation,
+- the distinction between missingness and insufficient sample size,
+- corrected code,
+- exact expected output,
+- and the change in interpretation caused by filtering.
+
+The response was generated using the **free Windows version of Copilot**. In this benchmark it therefore achieved the same **9.5/10** score as Codex, which was accessed at approximately **€20 per month**.
+
+This should not be interpreted as evidence that Copilot and Codex are generally equivalent systems. It means only that their responses to this particular R reasoning benchmark received the same score.
+
+---
+
+## 9.2 Codex
 
 ### Score: 9.5/10
 
@@ -484,7 +656,7 @@ Codex demonstrated genuine R-specific reasoning rather than merely recognizing s
 
 ---
 
-## 9.2 Nemotron-3-Super:cloud
+## 9.3 Nemotron-3-Super:cloud
 
 ### Score: 6.5/10
 
@@ -531,7 +703,7 @@ A meaningful step up from weaker models, but still unreliable on subtle executio
 
 ---
 
-## 9.3 Gemma4:latest (9.6 GB)
+## 9.4 Gemma4:latest (9.6 GB)
 
 ### Score: 6.0/10
 
@@ -565,7 +737,7 @@ Good R knowledge and a strong correction, but not precise enough on the benchmar
 
 ---
 
-## 9.4 Nemotron-3.5-Lightning:latest (25 GB)
+## 9.5 Nemotron-3.5-Lightning:latest (25 GB)
 
 ### Score: 6.0/10
 
@@ -631,7 +803,7 @@ Strong core mechanics and a good repair, but an important `dplyr` empty-group mi
 
 ---
 
-## 9.5 GPT-OSS 20B (13 GB)
+## 9.6 GPT-OSS 20B (13 GB)
 
 ### Score: 5.0/10
 
@@ -672,7 +844,7 @@ Good mental execution of the original code, but weaker knowledge of API details 
 
 ---
 
-## 9.6 Qwen3-Coder:30B (18 GB)
+## 9.7 Qwen3-Coder:30B (18 GB)
 
 ### Score: 3.5/10
 
@@ -730,7 +902,7 @@ Able to construct a plausible repair, but unreliable when asked what the origina
 
 ---
 
-## 9.7 DeepSeek-Coder (779 MB)
+## 9.8 DeepSeek-Coder (779 MB)
 
 ### Score: 3.0/10
 
@@ -774,7 +946,7 @@ The response recognized relevant R vocabulary but did not convincingly execute t
 
 ---
 
-## 9.8 Gemma 4E4B (8 GB)
+## 9.9 Gemma 4E4B (8 GB)
 
 ### Score: 2.5/10
 
@@ -839,7 +1011,7 @@ A good example of how fluent statistical prose can conceal weak language-specifi
 
 ---
 
-## 9.9 Qwen2.5-Coder (4.7 GB)
+## 9.10 Qwen2.5-Coder (4.7 GB)
 
 ### Score: 2.0/10
 
@@ -903,7 +1075,7 @@ The model showed some ability to produce plausible corrected R code, but its exp
 
 ---
 
-## 9.10 Mistral:latest (4.4 GB)
+## 9.11 Mistral:latest (4.4 GB)
 
 ### Score: 1.5/10
 
@@ -930,7 +1102,7 @@ The weakest response in the current benchmark: core R semantics, task fidelity, 
 
 ---
 
-## 9.11 Qwen3.6 and Qwen3.6:35B
+## 9.12 Qwen3.6 and Qwen3.6:35B
 
 ### Score: Not scored
 
@@ -952,6 +1124,7 @@ Not scored because no substantive final benchmark answer was produced.
 
 | Model | `mean()` NA default | Grouped `mutate()` | A disappears after filter | `cor()` NA default | Valid syntax recognition | Exact output |
 |---|---|---|---|---|---|---|
+| **Microsoft Copilot (Windows, Free)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Codex** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Nemotron-3-Super:cloud** | ✅ | ✅ | ❌ | ❌ / mixed | ✅ | ❌ original |
 | **Gemma4:latest (9.6 GB)** | ✅ | ✅ | ❌ | ❌ / mixed | ✅ | ❌ original |
@@ -1158,24 +1331,46 @@ Nevertheless, including the approximate local model size provides useful practic
 
 ---
 
+## 12.6 Access cost does not guarantee stronger benchmark performance
+
+The addition of Microsoft Copilot provides a useful access-cost comparison.
+
+On this benchmark:
+
+| Model | Score | Access used in this comparison |
+|---|---:|---|
+| Microsoft Copilot (Windows) | 9.5/10 | Free |
+| Codex | 9.5/10 | €20/month |
+
+The two responses therefore received the same score despite different access costs.
+
+This should not be generalized into a claim that the two systems have equivalent capabilities overall. The benchmark evaluates one narrow R reasoning task.
+
+Nevertheless, the comparison is practically relevant: a free system matched the highest score obtained by the paid system on this specific task.
+
+For the locally hosted models, subscription price is not directly comparable because local use requires hardware, storage, computation, and electricity.
+
+---
+
 # 13. Overall Ranking
 
 ```text
-1. Codex                                   9.5 / 10
-2. Nemotron-3-Super:cloud                  6.5 / 10
-3. Gemma4:latest (9.6 GB)                  6.0 / 10
-4. Nemotron-3.5-Lightning:latest (25 GB)   6.0 / 10
-5. GPT-OSS 20B (13 GB)                     5.0 / 10
-6. Qwen3-Coder:30B (18 GB)                 3.5 / 10
-7. DeepSeek-Coder (779 MB)                 3.0 / 10
-8. Gemma 4E4B (8 GB)                       2.5 / 10
-9. Qwen2.5-Coder (4.7 GB)                  2.0 / 10
-10. Mistral:latest (4.4 GB)                1.5 / 10
+T-1. Codex (€20/month)                          9.5 / 10
+T-1. Microsoft Copilot (Windows, Free)          9.5 / 10
+3.   Nemotron-3-Super:cloud                     6.5 / 10
+T-4. Gemma4:latest (9.6 GB)                     6.0 / 10
+T-4. Nemotron-3.5-Lightning:latest (25 GB)      6.0 / 10
+6.   GPT-OSS 20B (13 GB)                        5.0 / 10
+7.   Qwen3-Coder:30B (18 GB)                    3.5 / 10
+8.   DeepSeek-Coder (779 MB)                    3.0 / 10
+9.   Gemma 4E4B (8 GB)                          2.5 / 10
+10.  Qwen2.5-Coder (4.7 GB)                     2.0 / 10
+11.  Mistral:latest (4.4 GB)                    1.5 / 10
 ```
 
-The gap between Codex and the rest remains substantial.
+The top position is shared by Microsoft Copilot and Codex.
 
-Codex was the only tested model that consistently combined:
+Both responses consistently combined:
 
 - correct R semantics,
 - exact execution tracing,
@@ -1185,7 +1380,9 @@ Codex was the only tested model that consistently combined:
 - exact expected output,
 - and careful statistical interpretation.
 
-Nemotron-3-Super:cloud was the closest competitor but still failed an important `dplyr` edge case.
+The Copilot result is especially interesting from a practical perspective because the tested Windows version was free, while Codex was accessed at approximately €20 per month in this comparison.
+
+Nemotron-3-Super:cloud was the closest model below the two leaders but still failed an important `dplyr` edge case.
 
 Gemma4:latest and Nemotron-3.5-Lightning:latest formed the next tier: both showed solid R knowledge but missed the disappearing-group behavior that the benchmark was designed to expose.
 
@@ -1203,6 +1400,14 @@ The harder task was to answer:
 
 That required precise knowledge of language defaults, `dplyr` grouping behavior, missing-value propagation, filtering semantics, and statistical functions.
 
+The strongest responses came from **Microsoft Copilot (Windows, Free)** and **Codex**, both receiving **9.5/10**.
+
+Both correctly followed the execution state through the complete pipeline and distinguished programming behavior from statistical interpretation.
+
+The Copilot result is particularly notable from a practical perspective because the tested Windows version was **free**, whereas Codex was accessed at approximately **€20 per month** in the setup used for this comparison.
+
+This does not establish that the two systems have equivalent overall coding capabilities. The benchmark consists of a single compact R reasoning problem and evaluates a narrow set of abilities. It shows only that both responses achieved the same score on this task.
+
 The results suggest that future code-model benchmarks should include more tasks where models must:
 
 - mentally execute short programs,
@@ -1214,7 +1419,7 @@ The results suggest that future code-model benchmarks should include more tasks 
 
 These tasks are compact, cheap to evaluate, and surprisingly effective at distinguishing models that merely generate plausible code from models that actually reason about it.
 
-The comparison also suggests that larger local model files do not automatically imply stronger reasoning performance. This makes resource requirements an additional dimension worth considering when evaluating models for local use.
+The comparison also suggests that larger local model files or paid access do not automatically imply stronger reasoning performance. Resource requirements and access cost are therefore useful additional dimensions when evaluating models for practical use.
 
 ---
 
@@ -1273,6 +1478,8 @@ Nemotron-3-Super:cloud
 ```
 
 was cloud-hosted and should therefore not be interpreted as having the same local hardware requirements as the models downloaded and executed locally.
+
+Microsoft Copilot and Codex were also not part of the local Ollama/Odysseus execution pipeline. The Copilot response evaluated here came from the free Windows version of Copilot, while Codex was accessed through the paid setup used for this comparison at approximately €20 per month.
 
 ---
 
