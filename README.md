@@ -1352,6 +1352,38 @@ For the locally hosted models, subscription price is not directly comparable bec
 
 ---
 
+## 12.7 Coding Models Are Not Necessarily Better at Code-Execution Reasoning
+
+An important result of the benchmark is that models explicitly designed or marketed for coding did not necessarily outperform more general reasoning models.
+
+This is less surprising once the task itself is considered. The benchmark requires very little code generation. The corrected R code is relatively simple. Most of the difficulty lies instead in determining exactly what the existing program does.
+
+This requires several abilities that are related to, but distinct from, code generation:
+
+- maintaining the state of the data after each transformation,
+- applying package-specific execution semantics,
+- propagating missing values correctly,
+- tracking grouped operations,
+- predicting exact output,
+- distinguishing runtime behavior from intended behavior,
+- and interpreting the resulting statistical estimand.
+
+A coding-oriented model may be particularly strong at generating plausible implementations or recognizing common repair patterns without being equally strong at mentally executing an existing program line by line.
+
+The benchmark provides several examples of this separation. Some models produced largely valid corrected code despite misunderstanding the execution of the original program. Others correctly identified individual R concepts but failed to maintain a consistent representation of the data across the full reasoning chain.
+
+This suggests that at least three related capabilities should be distinguished:
+
+1. **Code generation** — producing syntactically and semantically plausible code from a specification.
+2. **Code debugging** — identifying likely faults and proposing repairs.
+3. **Code-execution reasoning** — determining the exact state and output of a program without executing it.
+
+The present benchmark primarily measures the third capability.
+
+This distinction may help explain why coding specialization alone did not guarantee strong performance. A model can be highly useful as a coding assistant while still being less reliable at exact program simulation, particularly when the task depends on language-specific defaults, package semantics, state tracking, and statistical interpretation.
+
+---
+
 # 13. Overall Ranking
 
 ```text
